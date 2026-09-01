@@ -45,22 +45,25 @@
   to { transform: rotate(360deg); }
 }
 
-/* The edge pagers nudge themselves into view every few seconds, then tuck back
-   against the edge. They never leave entirely: a sliver stays out so the tap
-   target is always there, and so the affordance does not vanish for anyone who
-   only glances at the screen between nudges. Horizontal only: the pager is
-   anchored by its bottom edge, so there is no centring transform for these
-   keyframes to overwrite — and with the animation off it simply sits out. */
-@keyframes edgePeekLeft {
-  0%, 6% { transform: translateX(-70%); opacity: 0.5; }
-  12%, 42% { transform: translateX(0); opacity: 1; }
-  52%, 100% { transform: translateX(-70%); opacity: 0.5; }
+/* The edge pagers hide completely, then pop back out every few seconds. A
+   thing that appears is far harder to miss than a thing that is simply there,
+   which is the whole job here: advertising a swipe nobody would otherwise know
+   about. Translated a full width out rather than merely faded, so while hidden
+   it cannot swallow a tap meant for the page underneath.
+
+   Horizontal only: the pager is anchored by its top edge, so there is no
+   centring transform for these keyframes to overwrite — and with the animation
+   off it simply sits out, visible and tappable. */
+@keyframes edgePopLeft {
+  0%, 44% { transform: translateX(-101%); opacity: 0; }
+  52%, 92% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(-101%); opacity: 0; }
 }
 
-@keyframes edgePeekRight {
-  0%, 6% { transform: translateX(70%); opacity: 0.5; }
-  12%, 42% { transform: translateX(0); opacity: 1; }
-  52%, 100% { transform: translateX(70%); opacity: 0.5; }
+@keyframes edgePopRight {
+  0%, 44% { transform: translateX(101%); opacity: 0; }
+  52%, 92% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(101%); opacity: 0; }
 }
 
 /* Utility animation classes */
@@ -69,8 +72,8 @@
 .anim-scale-in { animation: scaleIn var(--dur-standard) var(--ease-out) both; }
 .anim-spin { animation: spin 1s linear infinite; }
 .anim-pulse-halo { animation: pulseHalo 2.4s var(--ease-out) infinite; }
-.anim-edge-peek-left { animation: edgePeekLeft 7s var(--ease-out) infinite; }
-.anim-edge-peek-right { animation: edgePeekRight 7s var(--ease-out) infinite; }
+.anim-edge-pop-left { animation: edgePopLeft 5s var(--ease-out) infinite; }
+.anim-edge-pop-right { animation: edgePopRight 5s var(--ease-out) infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   .anim-fade-in,
@@ -78,8 +81,8 @@
   .anim-scale-in,
   .anim-spin,
   .anim-pulse-halo,
-  .anim-edge-peek-left,
-  .anim-edge-peek-right {
+  .anim-edge-pop-left,
+  .anim-edge-pop-right {
     animation: none !important;
   }
 }

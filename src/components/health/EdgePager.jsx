@@ -2,6 +2,12 @@ import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getMarker } from '../../data/markers.js';
 
+// Measured against the summary card on the marker screen: it starts 94px down
+// and runs 150px tall on every viewport height, because the top bar above it is
+// a fixed stack. Keep these in step if that card's padding changes.
+const CARD_TOP = 94;
+const CARD_HEIGHT = 150;
+
 // The next and previous markers, parked against the screen edges.
 //
 // A swipe nobody knows about is a feature nobody uses, so the gesture needs
@@ -11,8 +17,8 @@ import { getMarker } from '../../data/markers.js';
 // The sliver is narrow and the name is set vertically on purpose: at phone
 // width the content column is full-bleed, so anything pinned to an edge
 // overlaps whatever is beside it, and 24px is the least this can take while
-// still naming the marker. It sits below the chart so the line is never
-// covered.
+// still naming the marker. It sits beside the summary card at the top, clear
+// of the chart, so the line is never behind it.
 //
 // PORTALLED TO document.body ON PURPOSE. The page root carries
 // .anim-fade-slide-up, whose fill-mode leaves transform: translateY(0) on the
@@ -41,21 +47,23 @@ function Sliver({ markerKey, side, onGo, animate }) {
       onClick={() => onGo(markerKey)}
       aria-label={`${isLeft ? 'Previous' : 'Next'} marker: ${marker.name}`}
       className={`flex flex-col items-center justify-center gap-1.5 ${
-        animate ? (isLeft ? 'anim-edge-peek-left' : 'anim-edge-peek-right') : ''
+        animate ? (isLeft ? 'anim-edge-pop-left' : 'anim-edge-pop-right') : ''
       }`}
       style={{
         position: 'fixed',
-        // Anchored to the BOTTOM, not to a percentage of the viewport. What sits
-        // above the chart is a fixed stack of pixels, so a percentage puts this
-        // over the plot on one screen size and under it on another; measured up
-        // from the bottom nav it clears the chart on a tall screen and stays
-        // reachable on a short one. It also means no vertical transform, so the
-        // peek keyframes have nothing to overwrite.
-        bottom: 116,
+        // Level with the summary card — the block carrying the current value —
+        // so the pager reads as belonging to "this marker" rather than floating
+        // over the page. A fixed pixel offset, not a percentage: everything
+        // above that card is a fixed stack (top bar, then the card), measured
+        // at 94px from the top and unchanged across 640, 820 and 932px-tall
+        // viewports, whereas a percentage drifts onto the chart as the screen
+        // grows. Plus the notch inset, which the app shell adds to the page but
+        // cannot add to something portalled out of it.
+        top: `calc(${CARD_TOP}px + env(safe-area-inset-top))`,
         [side]: 0,
         [isLeft ? 'paddingLeft' : 'paddingRight']: `env(safe-area-inset-${side})`,
         zIndex: 30,
-        height: 150,
+        height: CARD_HEIGHT,
         width: 24,
         background: 'var(--color-chalk)',
         border: '1px solid var(--color-ivory)',
@@ -73,7 +81,7 @@ function Sliver({ markerKey, side, onGo, animate }) {
           // Read bottom-to-top on the left, top-to-bottom on the right, so each
           // name runs away from its own edge rather than upside down.
           transform: isLeft ? 'rotate(180deg)' : 'none',
-          maxHeight: 108,
+          maxHeight: 106,
         }}
       >
         {marker.name}

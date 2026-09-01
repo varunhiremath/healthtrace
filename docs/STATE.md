@@ -48,8 +48,9 @@ and the whole flow driven end to end in a real browser.
 Paging between markers worked but nobody could tell it was there: the only clue was a row of
 buttons below the chart, and the back arrow at the top read as the only way out. So the next and
 previous markers now sit as narrow slivers against the screen edges, each naming its marker, and
-they nudge themselves out every few seconds before tucking back — a moving thing at the edge is
-what makes a gesture discoverable.
+they hide and pop back out every few seconds — a thing that appears is far harder to miss than a
+thing that is merely there, which is the whole job: advertising a gesture nobody would otherwise
+know about.
 
 Four treatments were built into the real app and screenshotted against real data rather than
 mocked up, which is what surfaced the constraint none of them could dodge: **at phone width there
@@ -66,17 +67,23 @@ Two bugs the screenshots caught that no test would have:
   `document.body`, the same escape modals already use.
 - **Percentage positioning put it over the plot.** Everything above the chart is a fixed stack of
   pixels, so a percentage that clears the chart on one screen height covers it on another. The
-  pager is anchored by its bottom edge instead, measured up from the bottom nav, which clears the
-  chart on a tall screen and stays thumb-reachable on a short one. That also removed the vertical
-  centring transform, so the peek keyframes have nothing to overwrite — which is what had left the
-  reduced-motion case stuck mid-tuck instead of sitting out where it can be read.
+  pager is pinned to the summary card instead — 94px down, 150px tall, measured and confirmed
+  identical at 640, 820 and 932px-tall viewports — so it reads as belonging to the marker rather
+  than floating over the page, and the chart is never behind it. That also removed the vertical
+  centring transform, so the pop keyframes have nothing to overwrite, which is what had left the
+  reduced-motion case stranded mid-animation instead of sitting out where it can be read.
 
 The inline pager row under the chart is gone; two controls saying the same thing is clutter.
 
-Verified at 412px on a real 165-reading history: both phases of the peek cycle, no overlap with
-the plot area (chart ends at 530px, sliver starts at 554px), position unchanged after scrolling
-700px, swipe and tap both still page, one sliver only at the ends of the list, reduced-motion
-sitting fully out, and both themes. 331 vitest tests green, build clean.
+While hidden the sliver is translated a full width off-screen rather than just faded, so it cannot
+swallow a tap meant for the page underneath — checked with a hit test at the screen edge, which
+returns the page and not the button.
+
+Verified at 412px on a real 165-reading history: both phases of the cycle, the sliver flush with
+the summary card (both at y94, 150 tall) and clear of the plot (chart starts at y310), position
+unchanged after scrolling 700px, the edge hit test while hidden, swipe and tap both still paging,
+one sliver only at the ends of the list, reduced motion sitting fully out and opaque, and both
+themes. 331 vitest tests green, build clean.
 
 ### 2026-09-01 — trend charts read as time, and markers page without going back
 

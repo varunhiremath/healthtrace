@@ -113,8 +113,9 @@ clinical cut-off.
 `components/health/EdgePager.jsx` is the visible half of that gesture: a 24px sliver at each screen
 edge naming the next and previous marker. It portals to `document.body` for the same reason modals
 do — the page root's entrance animation leaves a `transform` behind, which would otherwise make it
-the containing block for `position: fixed`. It is anchored by its BOTTOM edge, not a percentage, so
-it clears the chart on every screen height.
+the containing block for `position: fixed`. It is pinned to the summary card by a fixed pixel offset, not a
+percentage, so it clears the chart on every screen height, and it hides and pops on a 5s cycle
+(gated by `settingsStore.effects` and `prefers-reduced-motion`).
 
 `loading` is true until Dexie has actually answered, so a screen never renders "empty" over data
 that is still arriving.
