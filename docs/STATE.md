@@ -43,6 +43,41 @@ and the whole flow driven end to end in a real browser.
 
 ## Build log
 
+### 2026-09-01 — the edge pagers made legible
+
+The first version was unreadable at arm's length: 9px uppercase in muted grey,
+on a near-white sliver, against a near-white page — small type and low contrast
+compounding each other. Four directions were built into the real app and
+screenshotted rather than mocked up (solid indigo, tinted by the neighbour's own
+verdict, a bold gradient, and a horizontal chip), which is what settled it:
+
+- The **gradient** at 38px wide clipped the big value on the left and "since
+  last" on the right. Prominence bought at the cost of the number you came for.
+- The **status tint** carries real information — you would see that the next
+  marker is out of range before going there — but both neighbours being in range
+  makes it teal-on-teal against the chart's own green band, the weakest contrast
+  of the four, and the tabs changing colour as you page reads as busy.
+- The **horizontal chip** is the easiest to read, and lies across the date and
+  the delta to do it.
+
+Shipped: solid `--color-pulse` with white 11px bold, chevron thickened, still
+only 30px wide. Filled indigo is how every other pressable thing in the app is
+coloured, so it reads as a control rather than decoration, and white on the
+accent is what the design rules already require.
+
+The chevron also nudges 3px toward its own edge and back on a 1.3s loop — its
+own animation nested inside the tab's pop cycle, so the two transforms never
+fight. Verified by seeking each animation independently: the tab's pop and the
+chevron's drift move separately, and with reduced motion both sit still with the
+tab out and opaque.
+
+Verified at 412px on a 165-reading history: computed paint (indigo #4f46e5,
+white, 11px, weight 700), tab flush with the summary card and clear of the
+chart, chevron drifting outward on both sides, fully off-screen at opacity 0
+while hidden, edge hit test returning the page not the button, position
+unchanged after scrolling 700px, swipe and tap both still paging, and both
+themes. 331 vitest tests green, build clean.
+
 ### 2026-09-01 — the swipe gets something to look at
 
 Paging between markers worked but nobody could tell it was there: the only clue was a row of

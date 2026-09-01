@@ -114,8 +114,10 @@ clinical cut-off.
 edge naming the next and previous marker. It portals to `document.body` for the same reason modals
 do — the page root's entrance animation leaves a `transform` behind, which would otherwise make it
 the containing block for `position: fixed`. It is pinned to the summary card by a fixed pixel offset, not a
-percentage, so it clears the chart on every screen height, and it hides and pops on a 5s cycle
-(gated by `settingsStore.effects` and `prefers-reduced-motion`).
+percentage, so it clears the chart on every screen height, and it hides and pops on a 5s cycle with the
+chevron nudging on its own 1.3s loop (both gated by `settingsStore.effects` and
+`prefers-reduced-motion`). Solid `--color-pulse` with white type — the quiet card treatment it
+started with was unreadable against the near-white page.
 
 `loading` is true until Dexie has actually answered, so a screen never renders "empty" over data
 that is still arriving.

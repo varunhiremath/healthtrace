@@ -66,6 +66,19 @@
   100% { transform: translateX(101%); opacity: 0; }
 }
 
+/* The chevron drifts toward its own edge and back while the tab is out — a
+   small continuous "keep going this way" under the tab's own pop cycle. Its
+   own transform, nested inside the tab's, so the two never fight. */
+@keyframes chevronNudgeLeft {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-3px); }
+}
+
+@keyframes chevronNudgeRight {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(3px); }
+}
+
 /* Utility animation classes */
 .anim-fade-in { animation: fadeIn var(--dur-standard) var(--ease-out) both; }
 .anim-fade-slide-up { animation: fadeSlideUp var(--dur-enter) var(--ease-out) both; }
@@ -74,6 +87,8 @@
 .anim-pulse-halo { animation: pulseHalo 2.4s var(--ease-out) infinite; }
 .anim-edge-pop-left { animation: edgePopLeft 5s var(--ease-out) infinite; }
 .anim-edge-pop-right { animation: edgePopRight 5s var(--ease-out) infinite; }
+.anim-chevron-nudge-left { animation: chevronNudgeLeft 1.3s ease-in-out infinite; }
+.anim-chevron-nudge-right { animation: chevronNudgeRight 1.3s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   .anim-fade-in,
@@ -82,7 +97,9 @@
   .anim-spin,
   .anim-pulse-halo,
   .anim-edge-pop-left,
-  .anim-edge-pop-right {
+  .anim-edge-pop-right,
+  .anim-chevron-nudge-left,
+  .anim-chevron-nudge-right {
     animation: none !important;
   }
 }

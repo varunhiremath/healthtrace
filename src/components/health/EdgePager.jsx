@@ -2,23 +2,23 @@ import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getMarker } from '../../data/markers.js';
 
-// Measured against the summary card on the marker screen: it starts 94px down
-// and runs 150px tall on every viewport height, because the top bar above it is
-// a fixed stack. Keep these in step if that card's padding changes.
-const CARD_TOP = 94;
-const CARD_HEIGHT = 150;
-
 // The next and previous markers, parked against the screen edges.
 //
 // A swipe nobody knows about is a feature nobody uses, so the gesture needs
 // something visible saying which way to go and what is over there — "there is
 // more this way" is far less useful than "Triglycerides is this way".
 //
-// The sliver is narrow and the name is set vertically on purpose: at phone
-// width the content column is full-bleed, so anything pinned to an edge
-// overlaps whatever is beside it, and 24px is the least this can take while
-// still naming the marker. It sits beside the summary card at the top, clear
-// of the chart, so the line is never behind it.
+// It wears the app's primary indigo with white type rather than the quiet card
+// treatment it started with. The first attempt was 9px uppercase in muted grey,
+// on a near-white sliver, against a near-white page: small type and low
+// contrast compounding each other, and unreadable at arm's length. Filled
+// indigo is also how every other pressable thing in the app is coloured, so it
+// reads as a control instead of decoration.
+//
+// The name is set vertically on purpose: at phone width the content column is
+// full-bleed, so anything pinned to an edge overlaps whatever is beside it, and
+// 30px is the least this can take while still naming the marker. It sits level
+// with the summary card, clear of the chart, so the line is never behind it.
 //
 // PORTALLED TO document.body ON PURPOSE. The page root carries
 // .anim-fade-slide-up, whose fill-mode leaves transform: translateY(0) on the
@@ -26,18 +26,25 @@ const CARD_HEIGHT = 150;
 // containing block for position: fixed inside it. Rendered in place, these
 // would be pinned to the whole scrolling page rather than the viewport and
 // would slide away as you scrolled. Same reason modals portal out.
+
+// Measured against the summary card on the marker screen: it starts 94px down
+// and runs 150px tall on every viewport height, because the top bar above it is
+// a fixed stack. Keep these in step if that card's padding changes.
+const CARD_TOP = 94;
+const CARD_HEIGHT = 150;
+
 export default function EdgePager({ prev, next, onGo, animate = true }) {
   if (!prev && !next) return null;
   return createPortal(
     <>
-      {prev && <Sliver markerKey={prev} side="left" onGo={onGo} animate={animate} />}
-      {next && <Sliver markerKey={next} side="right" onGo={onGo} animate={animate} />}
+      {prev && <Tab markerKey={prev} side="left" onGo={onGo} animate={animate} />}
+      {next && <Tab markerKey={next} side="right" onGo={onGo} animate={animate} />}
     </>,
     document.body
   );
 }
 
-function Sliver({ markerKey, side, onGo, animate }) {
+function Tab({ markerKey, side, onGo, animate }) {
   const marker = getMarker(markerKey);
   if (!marker) return null;
   const isLeft = side === 'left';
@@ -46,7 +53,7 @@ function Sliver({ markerKey, side, onGo, animate }) {
     <button
       onClick={() => onGo(markerKey)}
       aria-label={`${isLeft ? 'Previous' : 'Next'} marker: ${marker.name}`}
-      className={`flex flex-col items-center justify-center gap-1.5 ${
+      className={`flex flex-col items-center justify-center gap-2 ${
         animate ? (isLeft ? 'anim-edge-pop-left' : 'anim-edge-pop-right') : ''
       }`}
       style={{
@@ -64,29 +71,34 @@ function Sliver({ markerKey, side, onGo, animate }) {
         [isLeft ? 'paddingLeft' : 'paddingRight']: `env(safe-area-inset-${side})`,
         zIndex: 30,
         height: CARD_HEIGHT,
-        width: 24,
-        background: 'var(--color-chalk)',
-        border: '1px solid var(--color-ivory)',
-        borderLeftWidth: isLeft ? 0 : 1,
-        borderRightWidth: isLeft ? 1 : 0,
-        borderRadius: isLeft ? '0 14px 14px 0' : '14px 0 0 14px',
-        boxShadow: isLeft ? '4px 0 16px rgba(15,23,42,0.10)' : '-4px 0 16px rgba(15,23,42,0.10)',
+        width: 30,
+        background: 'var(--color-pulse)',
+        border: 'none',
+        borderRadius: isLeft ? '0 16px 16px 0' : '16px 0 0 16px',
+        boxShadow: isLeft ? '5px 0 20px rgba(79,70,229,0.35)' : '-5px 0 20px rgba(79,70,229,0.35)',
       }}
     >
       <span
-        className="truncate font-sans text-[9px] font-bold uppercase tracking-wide"
+        className="truncate font-sans text-[11px] font-bold tracking-wide"
         style={{
-          color: 'var(--color-text-secondary)',
+          // White on the accent, per the design rule — never the dark ink.
+          color: '#ffffff',
           writingMode: 'vertical-rl',
           // Read bottom-to-top on the left, top-to-bottom on the right, so each
           // name runs away from its own edge rather than upside down.
           transform: isLeft ? 'rotate(180deg)' : 'none',
-          maxHeight: 106,
+          maxHeight: 104,
         }}
       >
         {marker.name}
       </span>
-      <Chevron size={13} className="flex-shrink-0" style={{ color: 'var(--color-pulse)' }} />
+      <span
+        className={`flex flex-shrink-0 ${
+          animate ? (isLeft ? 'anim-chevron-nudge-left' : 'anim-chevron-nudge-right') : ''
+        }`}
+      >
+        <Chevron size={16} strokeWidth={2.75} style={{ color: '#ffffff' }} />
+      </span>
     </button>
   );
 }
