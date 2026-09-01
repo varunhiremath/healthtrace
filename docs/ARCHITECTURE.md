@@ -110,6 +110,12 @@ clinical cut-off.
 | `useHaptics()` | `fire(kind)` — gated on `effects` |
 | `useSwipeNav({onLeft,onRight,enabled})` | Touch handlers to spread onto an element, plus left/right arrow keys. Never calls `preventDefault`, so vertical scrolling is untouched |
 
+`components/health/EdgePager.jsx` is the visible half of that gesture: a 24px sliver at each screen
+edge naming the next and previous marker. It portals to `document.body` for the same reason modals
+do — the page root's entrance animation leaves a `transform` behind, which would otherwise make it
+the containing block for `position: fixed`. It is anchored by its BOTTOM edge, not a percentage, so
+it clears the chart on every screen height.
+
 `loading` is true until Dexie has actually answered, so a screen never renders "empty" over data
 that is still arriving.
 

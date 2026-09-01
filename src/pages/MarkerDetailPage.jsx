@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Star, Target, Trash2, Info, Calculator, Share2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Star, Target, Trash2, Info, Calculator, Share2 } from 'lucide-react';
 import { getMarker } from '../data/markers.js';
 import { CATEGORIES } from '../data/categories.js';
 import { useMarkerHistory, useHealthData } from '../hooks/useHealth.js';
@@ -11,6 +11,7 @@ import { formatDate, relativeDate, todayKey } from '../utils/dates.js';
 import { DERIVED_SOURCES } from '../utils/derived.js';
 import { pagerOrder, pagerNeighbours } from '../utils/pager.js';
 import useSwipeNav from '../hooks/useSwipeNav.js';
+import EdgePager from '../components/health/EdgePager.jsx';
 import { deleteReading, setTarget, clearTarget } from '../db/actions.js';
 import useSettingsStore from '../store/settingsStore.js';
 import useUIStore from '../store/uiStore.js';
@@ -33,6 +34,7 @@ export default function MarkerDetailPage() {
   const data = useHealthData();
   const units = useSettingsStore((s) => s.units);
   const togglePinned = useSettingsStore((s) => s.togglePinned);
+  const effects = useSettingsStore((s) => s.effects);
   const setUnit = useSettingsStore((s) => s.setUnit);
   const showToast = useUIStore((s) => s.showToast);
   const confirm = useUIStore((s) => s.confirm);
@@ -52,7 +54,7 @@ export default function MarkerDetailPage() {
   // Every marker this person has data for, in the order Trends lists them, so
   // a swipe walks the same path as scrolling that page.
   const order = useMemo(() => pagerOrder(data.rows, CATEGORIES), [data.rows]);
-  const { index, total, prev, next } = useMemo(() => pagerNeighbours(order, key), [order, key]);
+  const { prev, next } = useMemo(() => pagerNeighbours(order, key), [order, key]);
   const goTo = (target) => target && navigate(`/markers/${target}`, { replace: true });
   const swipe = useSwipeNav({
     onLeft: () => goTo(next),
@@ -98,6 +100,7 @@ export default function MarkerDetailPage() {
 
   return (
     <div key={key} className="anim-fade-slide-up pb-6" {...swipe}>
+      <EdgePager prev={prev} next={next} onGo={goTo} animate={effects} />
       <TopBar
         title={marker.name}
         subtitle={
@@ -240,21 +243,6 @@ export default function MarkerDetailPage() {
               </p>
             )}
           </section>
-        )}
-
-        {/* Straight on to the next marker. The gesture needs something visible
-            to advertise it, and a keyboard needs something to click. */}
-        {(prev || next) && (
-          <nav className="mb-5 flex items-stretch gap-2" aria-label="Other markers">
-            <PagerButton markerKey={prev} direction="prev" onGo={goTo} />
-            <span
-              className="flex flex-shrink-0 items-center px-1 font-sans text-[11px] tabular-nums"
-              style={{ color: 'var(--color-ash)' }}
-            >
-              {index + 1} / {total}
-            </span>
-            <PagerButton markerKey={next} direction="next" onGo={goTo} />
-          </nav>
         )}
 
         {/* What it is */}
@@ -402,32 +390,6 @@ function Stat({ label, value, unit }) {
         </span>
       </p>
     </div>
-  );
-}
-
-// One end of the pager. An empty slot still takes up its half of the row, so
-// the marker you are on does not jump sideways as you page past the first or
-// last one.
-function PagerButton({ markerKey, direction, onGo }) {
-  const marker = markerKey ? getMarker(markerKey) : null;
-  const isPrev = direction === 'prev';
-  if (!marker) return <span className="min-w-0 flex-1" aria-hidden="true" />;
-  return (
-    <button
-      onClick={() => onGo(markerKey)}
-      aria-label={`${isPrev ? 'Previous' : 'Next'} marker: ${marker.name}`}
-      className={`flex min-w-0 flex-1 items-center gap-1 rounded-xl px-2.5 py-2.5 ${isPrev ? 'justify-start' : 'justify-end'}`}
-      style={{ background: 'var(--color-chalk)', border: '1px solid var(--color-ivory)' }}
-    >
-      {isPrev && <ChevronLeft size={15} className="flex-shrink-0" style={{ color: 'var(--color-ash)' }} />}
-      <span
-        className="truncate font-sans text-xs font-semibold"
-        style={{ color: 'var(--color-text-primary)' }}
-      >
-        {marker.name}
-      </span>
-      {!isPrev && <ChevronRight size={15} className="flex-shrink-0" style={{ color: 'var(--color-ash)' }} />}
-    </button>
   );
 }
 
