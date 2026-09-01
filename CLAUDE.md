@@ -73,7 +73,10 @@ Both light and dark themes are defined; anything on an accent background uses wh
   every UI bug found so far — a passing unit test did not.
 
 ## Workflow
-- Develop on a feature branch; one PR per feature, squash-merged to `main`.
+- **Push straight to `main`** — standing instruction from the user (2026-09-01). Work on the
+  feature branch, then fast-forward `main` onto it and push both. No PR unless asked. `main` is
+  what deploys, so anything not on it does not exist as far as the user's phone is concerned.
+- Every push to `main` is a release: verify before pushing, not after.
 - CI (`.github/workflows/deploy.yml`) runs vitest + a production build on every PR, then deploys
   Pages from `main`. `android-apk.yml` publishes a sideloadable APK to Releases on every push to
   `main`; the `android/` project is generated in CI and is not committed.
