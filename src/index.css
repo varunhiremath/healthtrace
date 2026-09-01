@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  /* Safety net: a too-wide row can never shift the whole app sideways. */
+  overflow-x: hidden;
+}
+
+/* Numbers are read side by side across rows and charts — tabular figures keep
+   the columns from dancing as values change. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* Horizontally-scrollable rows (chips, category pills) without a visible bar. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Smooth theme switches: animate colour-only properties. */
+* {
+  transition: background-color var(--dur-standard) var(--ease-out),
+    border-color var(--dur-standard) var(--ease-out),
+    color var(--dur-standard) var(--ease-out);
+}
+
+/* Tactile press feedback on tappable elements. */
+button {
+  transition: transform var(--dur-micro) var(--ease-out),
+    background-color var(--dur-standard) var(--ease-out),
+    color var(--dur-standard) var(--ease-out);
+}
+button:active {
+  transform: scale(0.97);
+}
+
+/* Keep the SVG visuals (charts, rings, sparklines) crisp. */
+svg,
+svg * {
+  transition: none;
+}
+
+/* Inputs inherit the app's type; 16px avoids iOS zoom-on-focus. */
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  button:active {
+    transition: none !important;
+    transform: none !important;
+  }
+}

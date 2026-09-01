@@ -1,0 +1,94 @@
+name: Android APK
+
+# Wraps the built PWA in a Capacitor WebView and publishes an installable APK to
+# Releases. The Android project is NOT committed — `npx cap add android`
+# generates it here, so there is no large generated Gradle tree in the repo to
+# keep in step with the Capacitor version.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. v1.2.3)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    env:
+      VERSION: >-
+        ${{ inputs.version
+            || (startsWith(github.ref, 'refs/tags/') && github.ref_name)
+            || format('build-{0}', github.run_number) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      # A Capacitor WebView serves from the file:// root, so the bundle must be
+      # built with base '/' rather than the GitHub Pages '/healthtrace/'.
+      - name: Build web bundle for Capacitor
+        run: npm run build
+        env:
+          CAPACITOR_BUILD: 'true'
+
+      - name: Generate and sync the Android project
+        run: |
+          npx cap add android || echo "android/ already present"
+          npx cap sync android
+
+      # assembleDebug auto-signs with the SDK debug keystore, which modern
+      # Android requires for a sideload install. assembleRelease would produce an
+      # unsigned APK the OS rejects as "package appears to be invalid".
+      - name: Build debug-signed APK
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: mv android/app/build/outputs/apk/debug/app-debug.apk healthtrace-${{ env.VERSION }}.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: healthtrace-apk
+          path: healthtrace-${{ env.VERSION }}.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          name: HealthTrace ${{ env.VERSION }}
+          body: |
+            Android build of HealthTrace ${{ env.VERSION }}.
+
+            Install on your phone:
+            1. Download the APK below.
+            2. Allow "install from unknown sources" if prompted.
+            3. Open the APK to install.
+
+            Your data stays on the device. Export a backup from More → Export
+            before reinstalling, since an uninstall clears the app's storage.
+          files: healthtrace-${{ env.VERSION }}.apk
+          token: ${{ secrets.GITHUB_TOKEN }}
