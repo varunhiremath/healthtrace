@@ -1,15 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#6366F1"/>
-      <stop offset="100%" stop-color="#4338CA"/>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#EF4444"/>
+      <stop offset="100%" stop-color="#B91C1C"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <!-- A trace line: flat, a beat, then climbing steadily. The app in one mark. -->
-  <path d="M84 300 H166 L196 214 L232 356 L270 268 L300 300 H352"
-        fill="none" stroke="#FFFFFF" stroke-width="26"
+  <rect width="512" height="512" rx="112" fill="url(#tile)"/>
+  <!-- A drop of blood, knocked out of the tile, with a pulse cut through it.
+       The mark is the app in one image: what is measured, and that it moves. -->
+  <path d="M256 92 C256 92 148 224 148 302 a108 108 0 0 0 216 0 C364 224 256 92 256 92 Z" fill="#FFFFFF"/>
+  <path d="M188 306 H224 L246 252 L278 356 L300 306 H332"
+        fill="none" stroke="#DC2626" stroke-width="26"
         stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="380" cy="300" r="21" fill="#34D399"/>
-  <path d="M352 300 H359" stroke="#FFFFFF" stroke-width="26" stroke-linecap="round"/>
 </svg>

@@ -43,6 +43,19 @@ and the whole flow driven end to end in a real browser.
 
 ## Build log
 
+### 2026-09-01 — app icon
+
+The mark is now a white blood drop knocked out of a red tile, with a pulse cut through it: what the
+app measures, and that it moves. Regenerated at every size from `public/icon.svg`, including the
+maskable variant — full-bleed with no corner radius and the drop scaled to 76%, so a launcher can
+crop it to a circle or a squircle without clipping the mark.
+
+The app's UI stays indigo. Red is already load-bearing in this design system — `--status-high` means
+a reading is outside its range — so promoting it to the primary accent would put the brand colour in
+direct conflict with the one that means "look at this". The manifest `theme_color` and the runtime
+`<meta name="theme-color">` therefore stay indigo, matching the chrome around the app rather than
+the icon on the home screen.
+
 ### 2026-09-01 — v1.2.0, PDFs in and cards out
 
 **PDF import.** `pdfText.js` extracts a PDF's text and — the part that matters — rebuilds it into
