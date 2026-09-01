@@ -103,3 +103,31 @@ export function relativeDate(key, from = todayKey()) {
   const years = Math.floor(months / 12);
   return years === 1 ? '1 year ago' : `${years} years ago`;
 }
+
+// The calendar years a time span touches, each clamped to the span itself.
+//
+// A chart striping its x-axis by year needs the bounds of every year it shows,
+// including the partial ones at each end — a run from Oct 2024 to Mar 2026 has
+// a stub of 2024, all of 2025, and a stub of 2026. Bounds are epoch
+// milliseconds because that is what a time axis is scaled in; the span is not
+// date keys, since a chart pads its domain past the first and last reading.
+export function yearBands(startMs, endMs) {
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return [];
+
+  const first = new Date(startMs).getFullYear();
+  const last = new Date(endMs).getFullYear();
+  // Nothing is legible striped a hundred ways, and a corrupt date should not
+  // spin out thousands of bands. Past that, the span is one undivided block.
+  if (last - first > MAX_YEAR_BANDS) return [{ year: first, start: startMs, end: endMs }];
+
+  const bands = [];
+  for (let year = first; year <= last; year += 1) {
+    const opens = new Date(year, 0, 1, 0, 0, 0, 0).getTime();
+    // The last instant before the next year opens, so two bands never overlap.
+    const closes = new Date(year + 1, 0, 1, 0, 0, 0, 0).getTime() - 1;
+    bands.push({ year, start: Math.max(opens, startMs), end: Math.min(closes, endMs) });
+  }
+  return bands;
+}
+
+const MAX_YEAR_BANDS = 40;

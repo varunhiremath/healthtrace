@@ -43,6 +43,41 @@ and the whole flow driven end to end in a real browser.
 
 ## Build log
 
+### 2026-09-01 — trend charts read as time, and markers page without going back
+
+Two things the app got wrong once there was real history in it.
+
+**The x-axis was lying.** It was categorical — one evenly spaced slot per reading — so a
+four-year gap and a four-week gap were drawn identically. With readings from 2022, 2023, 2024,
+2025 and 2026 on one line, there was no way to see how long the span was, and the shape of the
+line implied a rate of change that was not real. It is now a genuine time scale
+(`type="number"` + `scale="time"`), so distance along the axis is elapsed time.
+
+**The year was missing.** Tick labels read "27 May", "13 Oct" with no year. Rather than repeat
+the year on every tick — four digits per label on a phone-width axis — each calendar year is now
+a stripe behind the line, named once, alternately tinted so the boundary shows without a rule
+drawn through the data. `yearBands` in `utils/dates.js` works out the bands, including the
+partial years at each end; a band too narrow for four digits drops its label and keeps its
+stripe. Ticks stay at the dates readings were actually taken, so no tick implies a measurement
+nobody took.
+
+**Paging between markers.** Reading one trend and then wanting the next meant going back to the
+list and opening it again. A left/right flick now moves to the next or previous marker, in the
+order the Trends list shows them (`pagerOrder` walks categories in list order, stable within
+each), with arrow keys for a keyboard and a visible prev/next row under the chart so the gesture
+is discoverable at all. `useSwipeNav` never calls `preventDefault`, and `swipeDirection` only
+accepts a gesture that is decisively sideways and quick — under 600ms, at least 60px, and at
+least 1.5× more horizontal than vertical. That is what keeps two things working that would
+otherwise break: vertical scrolling stays scrolling, and a slow horizontal drag across the chart
+still reads values with the tooltip instead of turning the page.
+
+Vertical swipes were considered and rejected: the marker screen scrolls vertically, so claiming
+that axis would mean cancelling the scroll the user asked for.
+
+Verified in a real browser at 412px with the full 165-reading history loaded: swipe both ways,
+short flick ignored, vertical gesture ignored, arrow keys, tapping the pager, and the chart in
+both light and dark themes. 331 vitest tests green, production build clean.
+
 ### 2026-09-01 — app icon
 
 The mark is now a white blood drop knocked out of a red tile, with a pulse cut through it: what the

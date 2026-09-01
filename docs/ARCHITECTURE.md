@@ -90,7 +90,8 @@ clinical cut-off.
 | `parseReport.js` | `parseReport`, `parseReportDate`, `parseReportName`, `matchProfileByName`, `normaliseText` — handles both the same-line layout and the two-column Epic/MyChart layout where values land on a later line, and reads the patient name out of a header so a pasted report files itself under the right person |
 | `trends.js` | `seriesFor`, `latest`, `previous`, `stats`, `delta`, `slopePerMonth`, `movingAverage`, `summarise`, `derivedSeries`, `rankByConcern`, `RANGES` |
 | `insights.js` | `buildInsights`, `headline`, `inRangeScore`, `reportSummary`, `sideOfRange`, `CHECKUP_INTERVAL_DAYS` |
-| `dates.js` | `toDateKey`, `todayKey`, `fromDateKey`, `isDateKey`, `daysBetween`, `monthsBetween`, `daysAgo`, `addDays`, `ageAt`, `formatDate`, `formatMonth`, `relativeDate` |
+| `dates.js` | `toDateKey`, `todayKey`, `fromDateKey`, `isDateKey`, `daysBetween`, `monthsBetween`, `daysAgo`, `addDays`, `ageAt`, `formatDate`, `formatMonth`, `relativeDate`, `yearBands` (the calendar years a time span touches, clamped to it — what the trend chart stripes by) |
+| `pager.js` | `pagerOrder`, `pagerNeighbours`, `swipeDirection`, `SWIPE` — the order markers are paged through (the Trends order) and whether a touch was a flick rather than a scroll or a chart drag |
 | `backup.js` | `buildBackup`, `validateBackup`, `backupFilename`, `BACKUP_VERSION` (2), `BACKUP_KIND`. v2 carries the household; v1 files are lifted into the same shape on import |
 | `csv.js` | `toCsv`, `fromCsv`, `parseCsv`, `escapeCsv`, `CSV_HEADERS` |
 | `theme.js` | `resolveTheme`, `applyTheme` (not node-tested — touches `document`) |
@@ -107,6 +108,7 @@ clinical cut-off.
 | `useProfile()` | The active person, with a fallback to the first profile |
 | `useReports(profileId)` / `useReadings(profileId)` / `useTargets(profileId)` / `useAttachments(id)` | Raw live queries, profile-scoped |
 | `useHaptics()` | `fire(kind)` — gated on `effects` |
+| `useSwipeNav({onLeft,onRight,enabled})` | Touch handlers to spread onto an element, plus left/right arrow keys. Never calls `preventDefault`, so vertical scrolling is untouched |
 
 `loading` is true until Dexie has actually answered, so a screen never renders "empty" over data
 that is still arriving.

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   toDateKey, fromDateKey, isDateKey, daysBetween, monthsBetween, addDays, ageAt,
   formatDate, formatMonth, relativeDate,
+  yearBands,
 } from './dates.js';
 
 describe('date keys', () => {
@@ -81,5 +82,56 @@ describe('formatting', () => {
     // Exactly two years must not round down to one.
     expect(relativeDate('2024-08-31', '2026-08-31')).toBe('2 years ago');
     expect(relativeDate('2024-09-01', '2026-08-31')).toBe('23 months ago');
+  });
+});
+
+describe('yearBands', () => {
+  const at = (y, m, d) => new Date(y, m - 1, d, 12).getTime();
+  const jan1 = (y) => new Date(y, 0, 1).getTime();
+
+  it('returns one band for a span inside a single year', () => {
+    const bands = yearBands(at(2025, 3, 4), at(2025, 11, 20));
+    expect(bands).toHaveLength(1);
+    expect(bands[0].year).toBe(2025);
+    // A partial year is clamped to the span, not opened out to the whole year.
+    expect(bands[0].start).toBe(at(2025, 3, 4));
+    expect(bands[0].end).toBe(at(2025, 11, 20));
+  });
+
+  it('splits a multi-year span at each new year', () => {
+    const bands = yearBands(at(2024, 10, 1), at(2026, 3, 15));
+    expect(bands.map((b) => b.year)).toEqual([2024, 2025, 2026]);
+    // The stubs at each end keep the span's own bounds...
+    expect(bands[0].start).toBe(at(2024, 10, 1));
+    expect(bands[2].end).toBe(at(2026, 3, 15));
+    // ...while the whole year in the middle runs from January to January.
+    expect(bands[1].start).toBe(jan1(2025));
+    expect(bands[1].end).toBe(jan1(2026) - 1);
+  });
+
+  it('leaves no gap and no overlap between adjacent bands', () => {
+    const bands = yearBands(at(2022, 5, 27), at(2026, 7, 11));
+    expect(bands.map((b) => b.year)).toEqual([2022, 2023, 2024, 2025, 2026]);
+    for (let i = 1; i < bands.length; i += 1) {
+      expect(bands[i].start).toBe(bands[i - 1].end + 1);
+    }
+  });
+
+  it('covers a leap year end to end', () => {
+    const bands = yearBands(jan1(2024), jan1(2025) - 1);
+    expect(bands).toHaveLength(1);
+    expect(bands[0].end - bands[0].start + 1).toBe(366 * 86400000);
+  });
+
+  it('collapses an absurd span rather than emitting thousands of bands', () => {
+    const bands = yearBands(at(1900, 1, 1), at(2026, 1, 1));
+    expect(bands).toHaveLength(1);
+    expect(bands[0].year).toBe(1900);
+  });
+
+  it('returns nothing for a backwards or unusable span', () => {
+    expect(yearBands(at(2026, 1, 2), at(2026, 1, 1))).toEqual([]);
+    expect(yearBands(NaN, at(2026, 1, 1))).toEqual([]);
+    expect(yearBands(undefined, null)).toEqual([]);
   });
 });
