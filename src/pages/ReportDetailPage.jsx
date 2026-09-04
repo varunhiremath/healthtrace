@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Pencil, Stethoscope } from 'lucide-react';
 import { db } from '../db/db.js';
+import { openRow } from '../db/vault.js';
 import { useReportReadings, useHealthData } from '../hooks/useHealth.js';
 import { reportSummary } from '../utils/insights.js';
 import { formatDate, relativeDate } from '../utils/dates.js';
@@ -29,9 +30,12 @@ export default function ReportDetailPage() {
 
   useEffect(() => {
     let cancelled = false;
-    db.reports.get(reportId).then((row) => {
-      if (!cancelled) setReport(row ?? null);
-    });
+    db.reports
+      .get(reportId)
+      .then((row) => openRow('reports', row))
+      .then((row) => {
+        if (!cancelled) setReport(row ?? null);
+      });
     return () => {
       cancelled = true;
     };

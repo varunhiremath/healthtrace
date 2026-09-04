@@ -4,6 +4,8 @@ import {
 } from 'lucide-react';
 import { useHealthData, useProfiles } from '../hooks/useHealth.js';
 import { db } from '../db/db.js';
+import { openRows } from '../db/vault.js';
+import useLockStore from '../store/lockStore.js';
 import { buildBackup, backupFilename } from '../utils/backup.js';
 import { toCsv } from '../utils/csv.js';
 import { eraseAllData } from '../db/actions.js';
@@ -12,6 +14,7 @@ import useUIStore from '../store/uiStore.js';
 import TopBar from '../components/layout/TopBar.jsx';
 
 export default function MorePage() {
+  const lockOn = useLockStore((s) => s.status) !== 'off';
   const navigate = useNavigate();
   const data = useHealthData();
   const { profiles } = useProfiles();
@@ -35,11 +38,13 @@ export default function MorePage() {
   // A backup is the household's whole archive, not just whoever is on screen —
   // exporting one person and later restoring it would quietly lose the rest.
   async function exportJson() {
+    // Opened on the way out: a backup has to be readable, or it is not a
+    // backup. The file itself is NOT encrypted, and the row below says so.
     const [allProfiles, allReports, allReadings, allTargets] = await Promise.all([
-      db.profile.toArray(),
-      db.reports.toArray(),
-      db.readings.toArray(),
-      db.targets.toArray(),
+      db.profile.toArray().then((rows) => openRows('profile', rows)),
+      db.reports.toArray().then((rows) => openRows('reports', rows)),
+      db.readings.toArray().then((rows) => openRows('readings', rows)),
+      db.targets.toArray().then((rows) => openRows('targets', rows)),
     ]);
     const doc = buildBackup({
       profiles: allProfiles,
@@ -113,7 +118,11 @@ export default function MorePage() {
           <Row
             icon={Download}
             label="Export a backup"
-            sub={`Everyone — ${profiles.length} ${profiles.length === 1 ? 'person' : 'people'}, all reports`}
+            sub={
+              lockOn
+                ? `Everyone — ${profiles.length} ${profiles.length === 1 ? 'person' : 'people'}. The file is NOT encrypted.`
+                : `Everyone — ${profiles.length} ${profiles.length === 1 ? 'person' : 'people'}, all reports`
+            }
             onClick={exportJson}
           />
           <Row
@@ -123,6 +132,12 @@ export default function MorePage() {
             onClick={exportCsv}
           />
           <Row icon={Upload} label="Import" sub="Restore a backup or load a CSV" onClick={() => navigate('/import')} />
+          {lockOn && (
+            <p className="px-1 pt-1 font-sans text-[11.5px] leading-relaxed" style={{ color: 'var(--color-ash)' }}>
+              Exported files are plain readable JSON and CSV. The lock protects this device, not a copy you carry off
+              it — a backup you could not open would not be a backup.
+            </p>
+          )}
         </Group>
 
         <Group title="Danger zone">

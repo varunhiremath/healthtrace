@@ -27,6 +27,13 @@ const DEFAULTS = {
   checkupReminder: true,
   checkupIntervalDays: 365,
   lastRemindedDate: '',
+  // Minutes in the background before the lock closes again. 0 locks the moment
+  // you switch away; -1 never re-locks while the tab is alive.
+  //
+  // Two minutes by default rather than zero: entering a report often means
+  // switching to a photo or a PDF and back, and a lock that shut every time
+  // would be unusable.
+  autoLockMinutes: 2,
 };
 
 const PERSISTED = Object.keys(DEFAULTS);
@@ -120,6 +127,10 @@ const useSettingsStore = create((set, get) => ({
   },
   markReminded(dateKey) {
     set({ lastRemindedDate: dateKey });
+    get().persist();
+  },
+  setAutoLockMinutes(autoLockMinutes) {
+    set({ autoLockMinutes });
     get().persist();
   },
   completeOnboarding() {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { HeartPulse, ShieldCheck, ClipboardPaste, TrendingUp } from 'lucide-react';
 import { addProfile } from '../../db/actions.js';
-import { listProfiles } from '../../db/db.js';
+import { listProfiles } from '../../db/actions.js';
 import { todayKey } from '../../utils/dates.js';
 import useSettingsStore from '../../store/settingsStore.js';
 import { Field, Input, Select, Button } from '../ui/Field.jsx';

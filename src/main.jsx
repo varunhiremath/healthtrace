@@ -4,6 +4,7 @@ import { RouterProvider } from 'react-router-dom';
 import { router } from './router.jsx';
 import { db } from './db/db.js';
 import useSettingsStore from './store/settingsStore.js';
+import useLockStore from './store/lockStore.js';
 import { applyTheme } from './utils/theme.js';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import DbRecovery from './components/DbRecovery.jsx';
@@ -32,6 +33,10 @@ function renderApp() {
 // Open the database before mounting, so a failed or blocked upgrade shows a
 // recovery screen instead of a blank app with every query throwing.
 db.open()
+  // Then read the vault, so the first paint already knows whether this device
+  // has a lock set. Rendering first would flash the app at somebody who locked
+  // it.
+  .then(() => useLockStore.getState().refresh())
   .then(renderApp)
   .catch((error) => {
     console.error('HealthTraceDB failed to open:', error);

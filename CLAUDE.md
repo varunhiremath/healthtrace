@@ -48,8 +48,15 @@ add a table, store field, util, hook, route, or localStorage key.
 8b. **Sharing is the one outward path.** `components/share/` sends data off the device, so it is
    always explicit, always per-item, previewed before it goes, and the name is opt-in. Never add a
    bulk or background share.
-9. **Modals portal to `document.body`**, cap at 90vh, and scroll inside (`components/ui/Modal.jsx`).
-10. **Migrations are append-only** `db.version(n)` blocks in `src/db/db.js`. Index only what is
+9. **The lock is encryption, never a gate.** `db/vault.js` owns the key and declares which
+   fields are secret. Two rules break easily and silently: **seal outside Dexie
+   transactions** (WebCrypto's native promises let a transaction commit early), and
+   **replace whole rows rather than patching them** (a Dexie `update` leaves the plaintext
+   field on disk beside the sealed blob). Never claim more protection than is real: which
+   markers are tracked, and on what dates, stays readable so the indexes still work, and
+   the Settings copy says exactly that.
+10. **Modals portal to `document.body`**, cap at 90vh, and scroll inside (`components/ui/Modal.jsx`).
+11. **Migrations are append-only** `db.version(n)` blocks in `src/db/db.js`. Index only what is
     queried.
 
 ## Wow, but calm
@@ -64,13 +71,19 @@ status colours (optimal / borderline / low / high / critical) are semantic and o
 Both light and dark themes are defined; anything on an accent background uses white text.
 
 ## Verifying
-- `npm test` — the pure logic (311 tests).
+- `npm test` — the pure logic and the cryptography (353 tests).
 - `npm run build` — must stay clean.
 - Heavy, rarely-used dependencies (pdfjs) are lazy-imported and kept OUT of the service-worker
   precache, so the PWA installs light and caches them on first use.
 - Run the real app to check UI changes: `npm run build && npx vite preview`, then drive it with
   Playwright (`executablePath: '/opt/pw-browsers/chromium'` in this sandbox). Screenshots caught
-  every UI bug found so far — a passing unit test did not.
+  every UI bug found so far — a passing unit test did not. Scroll an element into view before
+  clicking it by coordinates, or a button below the fold silently does nothing.
+- **For anything touching the lock, assert on IndexedDB directly** rather than on what the app
+  shows. Open `HealthTraceDB` in `page.evaluate` and check the rows on disk carry `sec` and no
+  plaintext. That is the only assertion that proves anything. Note that a full page load always
+  re-locks the app — the key lives in module memory and nowhere else — so a test has to unlock
+  again after every navigation.
 
 ## Workflow
 - **Push straight to `main`** — standing instruction from the user (2026-09-01). Work on the

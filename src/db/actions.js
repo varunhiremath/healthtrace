@@ -15,8 +15,10 @@
 /* --------------------------------------------------------------- profiles */
 
 export async function addProfile({ name = '', relation = '', dob = '', sex = null, heightCm = null } = {}) {
-  const existing = await listProfiles();
-  return db.profile.add({
+  // Colour is not a secret, so the raw rows are enough to pick the next one —
+  // no need to decrypt the household to add to it.
+  const existing = await db.profile.toArray();
+  return putRow('profile', {
     ...DEFAULT_PROFILE,
     name,
     relation,
@@ -29,7 +31,7 @@ export async function addProfile({ name = '', relation = '', dob = '', sex = nul
 }
 
 export async function updateProfile(profileId, patch) {
-  return db.profile.update(profileId, patch);
+  return patchRow('profile', profileId, patch);
 }
 
 // Removes a person and everything recorded about them. The household must keep
@@ -37,8 +39,8 @@ export async function updateProfile(profileId, patch) {
 // expected to have checked, and this refuses rather than leaving the app with
 // nobody to show.
 export async function deleteProfile(profileId) {
-  const profiles = await listProfiles();
-  if (profiles.length <= 1) {
+  const remaining = await db.profile.count();
+  if (remaining <= 1) {
     throw new Error('The last profile cannot be deleted.');
   }
   return db.transaction('rw', db.profile, db.reports, db.readings, db.targets, db.attachments, async () => {
@@ -51,14 +53,70 @@ export async function deleteProfile(profileId) {
   });
 }
 
-import { db, DEFAULT_PROFILE, nextProfileColor, listProfiles } from './db.js';
+import { db, DEFAULT_PROFILE, PROFILE_COLORS, nextProfileColor } from './db.js';
+import { sealRow, openRow, openRows } from './vault.js';
 import { todayKey } from '../utils/dates.js';
+
+// With the lock on, every write here goes through sealRow and every read
+// through openRow. Two rules that break silently if forgotten:
+//
+//   * SEAL OUTSIDE TRANSACTIONS. WebCrypto returns native promises that settle
+//     outside Dexie's transaction zone, so awaiting one inside a transaction
+//     lets it commit early, underneath the writes meant to be in it. Every path
+//     below prepares and seals first, then opens a transaction containing only
+//     Dexie calls.
+//   * REPLACE ROWS, NEVER PATCH THEM. A Dexie `update` carrying a plaintext
+//     field merges it in beside the sealed blob and leaves the secret on disk.
+//     Anything secret is written with `put` and a whole row.
+
+/** Replace a whole row, sealed. */
+async function putRow(table, row) {
+  return db[table].put(await sealRow(table, row));
+}
+
+/** Read-modify-write: open the row, apply the patch, put the whole thing back. */
+async function patchRow(table, id, patch) {
+  const current = await openRow(table, await db[table].get(id));
+  if (!current) throw new Error('That no longer exists.');
+  return putRow(table, { ...current, ...patch });
+}
+
+/* --------------------------------------------------------------- profiles */
+
+// These three moved here from db.js when the lock arrived: they read and write
+// rows, which now means sealing and opening them, and db.js cannot import the
+// vault without a cycle.
+
+export async function listProfiles() {
+  const rows = await openRows('profile', await db.profile.toArray());
+  return rows
+    .map((row) => ({ ...DEFAULT_PROFILE, ...row }))
+    .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+}
+
+// Resolve the person the app is currently showing. Falls back to the first
+// profile when the remembered one has been deleted, and creates one on a fresh
+// install so the rest of the app never has to handle "no profile at all".
+export async function getProfile(profileId) {
+  const rows = await listProfiles();
+  if (rows.length) {
+    return rows.find((row) => row.id === profileId) ?? rows[0];
+  }
+  const id = await putRow('profile', { ...DEFAULT_PROFILE, color: PROFILE_COLORS[0], createdAt: Date.now() });
+  return { ...DEFAULT_PROFILE, id, color: PROFILE_COLORS[0] };
+}
+
+export async function saveProfile(profileId, patch) {
+  const current = await getProfile(profileId);
+  await patchRow('profile', current.id, patch);
+  return { ...current, ...patch };
+}
 
 /* --------------------------------------------------------------- readings */
 
 export async function addReading({ profileId, markerKey, value, date = todayKey(), reportId = null, note = '' }) {
   if (profileId == null) throw new Error('addReading needs a profileId.');
-  return db.readings.add({
+  return putRow('readings', {
     profileId,
     markerKey,
     value,
@@ -70,7 +128,7 @@ export async function addReading({ profileId, markerKey, value, date = todayKey(
 }
 
 export async function updateReading(id, patch) {
-  return db.readings.update(id, patch);
+  return patchRow('readings', id, patch);
 }
 
 export async function deleteReading(id) {
@@ -83,38 +141,54 @@ export async function deleteReading(id) {
 // none of it does.
 export async function addReport({ profileId, date = todayKey(), title = '', lab = '', doctor = '', note = '' }, readings = []) {
   if (profileId == null) throw new Error('addReport needs a profileId.');
-  return db.transaction('rw', db.reports, db.readings, async () => {
-    const reportId = await db.reports.add({
-      profileId,
-      date,
-      title,
-      lab,
-      doctor,
-      note,
-      createdAt: Date.now(),
-    });
-    if (readings.length) {
-      await db.readings.bulkAdd(
-        readings.map((r) => ({
-          profileId,
-          markerKey: r.markerKey,
-          value: r.value,
-          note: r.note ?? '',
-          date,
-          reportId,
-          createdAt: Date.now(),
-        }))
-      );
-    }
-    return reportId;
+  // The id is assigned here rather than by the database, so the report AND its
+  // readings can be sealed before the transaction opens — keeping the "all or
+  // nothing" promise that the encryption would otherwise break.
+  const last = await db.reports.orderBy('id').last();
+  const reportId = (last?.id ?? 0) + 1;
+
+  const sealedReport = await sealRow('reports', {
+    id: reportId,
+    profileId,
+    date,
+    title,
+    lab,
+    doctor,
+    note,
+    createdAt: Date.now(),
   });
+  const sealedReadings = await Promise.all(
+    readings.map((r) =>
+      sealRow('readings', {
+        profileId,
+        markerKey: r.markerKey,
+        value: r.value,
+        note: r.note ?? '',
+        date,
+        reportId,
+        createdAt: Date.now(),
+      })
+    )
+  );
+
+  await db.transaction('rw', db.reports, db.readings, async () => {
+    await db.reports.put(sealedReport);
+    if (sealedReadings.length) await db.readings.bulkAdd(sealedReadings);
+  });
+  return reportId;
 }
 
 // Editing a report's date moves its readings with it — a reading's date must
 // always match the report it belongs to, or trends would show it twice.
 export async function updateReport(id, patch) {
+  // Sealed before the transaction; `carried` touches only clear fields, so it
+  // can stay a plain modify.
+  const current = await openRow('reports', await db.reports.get(id));
+  if (!current) return undefined;
+  const sealed = await sealRow('reports', { ...current, ...patch });
+
   return db.transaction('rw', db.reports, db.readings, async () => {
-    await db.reports.update(id, patch);
+    await db.reports.put(sealed);
     // A reading's date and owner must always match the report it came from, or
     // it would show on the wrong day, or in the wrong person's history.
     const carried = {};
@@ -137,26 +211,31 @@ export async function deleteReport(id) {
 
 // Replace the readings of an existing report wholesale (used by the editor).
 export async function replaceReportReadings(reportId, readings, date) {
+  // `date` and `profileId` are structural and stay in the clear, so the report
+  // does not have to be decrypted to be consulted.
+  const report = await db.reports.get(reportId);
+  const when = date ?? report?.date ?? todayKey();
+  // The report owns its readings, so the person is taken from it rather than
+  // passed in — the two can never disagree.
+  const profileId = report?.profileId ?? null;
+
+  const sealed = await Promise.all(
+    readings.map((r) =>
+      sealRow('readings', {
+        profileId,
+        markerKey: r.markerKey,
+        value: r.value,
+        note: r.note ?? '',
+        date: when,
+        reportId,
+        createdAt: Date.now(),
+      })
+    )
+  );
+
   return db.transaction('rw', db.reports, db.readings, async () => {
-    const report = await db.reports.get(reportId);
-    const when = date ?? report?.date ?? todayKey();
-    // The report owns its readings, so the person is taken from it rather than
-    // passed in — the two can never disagree.
-    const profileId = report?.profileId ?? null;
     await db.readings.where('reportId').equals(reportId).delete();
-    if (readings.length) {
-      await db.readings.bulkAdd(
-        readings.map((r) => ({
-          profileId,
-          markerKey: r.markerKey,
-          value: r.value,
-          note: r.note ?? '',
-          date: when,
-          reportId,
-          createdAt: Date.now(),
-        }))
-      );
-    }
+    if (sealed.length) await db.readings.bulkAdd(sealed);
   });
 }
 
@@ -165,8 +244,9 @@ export async function replaceReportReadings(reportId, readings, date) {
 export async function setTarget(profileId, markerKey, { min = null, max = null } = {}) {
   if (profileId == null) throw new Error('setTarget needs a profileId.');
   const existing = await db.targets.where('[profileId+markerKey]').equals([profileId, markerKey]).first();
-  if (existing) return db.targets.update(existing.id, { min, max });
-  return db.targets.add({ profileId, markerKey, min, max });
+  const row = { profileId, markerKey, min, max };
+  if (existing) row.id = existing.id;
+  return putRow('targets', row);
 }
 
 export async function clearTarget(profileId, markerKey) {
@@ -176,7 +256,9 @@ export async function clearTarget(profileId, markerKey) {
 /* ------------------------------------------------------------ attachments */
 
 export async function addAttachment(reportId, file) {
-  return db.attachments.add({
+  // sealRow turns `blob` into encrypted bytes when the lock is on. `size` stays
+  // in the clear so the UI can say how big a file is without opening it.
+  return putRow('attachments', {
     reportId,
     name: file.name,
     type: file.type,
@@ -203,8 +285,86 @@ export async function deleteAttachment(id) {
 // `intoProfileId` handles the single-person case: a v1 file, or a v2 file the
 // user chose to file under somebody who already exists.
 export async function importBackup(data, { mode = 'merge', intoProfileId = null } = {}) {
-  return db.transaction('rw', db.profile, db.reports, db.readings, db.targets, db.attachments, async () => {
-    if (mode === 'replace') {
+  const replacing = mode === 'replace';
+
+  // ---- resolve and seal, before any transaction opens --------------------
+  //
+  // Ids are assigned here rather than by the database. Sealing is async and
+  // would commit a Dexie transaction early, so the whole import has to be
+  // worked out up front — which also means the write itself stays atomic.
+
+  // Only colours and ids are read here, and neither is a secret, so this needs
+  // no key even before the household has been decrypted.
+  const rawProfiles = await db.profile.toArray();
+  let nextProfileId = rawProfiles.reduce((max, row) => Math.max(max, row.id ?? 0), 0) + 1;
+
+  const profileMap = new Map();
+  const newProfiles = [];
+
+  if (intoProfileId != null) {
+    // Everything in the file lands on one existing person.
+    for (const profile of data.profiles ?? []) profileMap.set(profile.id, intoProfileId);
+    profileMap.set(null, intoProfileId);
+    profileMap.set(undefined, intoProfileId);
+  } else {
+    const taken = [...rawProfiles];
+    for (const profile of data.profiles ?? []) {
+      const { id, ...rest } = profile;
+      const row = {
+        ...DEFAULT_PROFILE,
+        ...rest,
+        id: nextProfileId++,
+        color: rest.color ?? nextProfileColor(taken),
+        createdAt: rest.createdAt ?? Date.now(),
+      };
+      taken.push(row);
+      newProfiles.push(row);
+      profileMap.set(id, row.id);
+    }
+  }
+
+  // Anything the file did not attribute goes to the first person imported, or
+  // to whoever is already here — never to nobody.
+  const fallbackProfileId = intoProfileId ?? newProfiles[0]?.id ?? rawProfiles[0]?.id ?? null;
+  const ownerOf = (id) => profileMap.get(id) ?? fallbackProfileId;
+
+  const lastReport = await db.reports.orderBy('id').last();
+  let nextReportId = (lastReport?.id ?? 0) + 1;
+
+  const reportMap = new Map();
+  const newReports = [];
+  for (const report of data.reports) {
+    const { id, profileId, ...rest } = report;
+    const row = { ...rest, id: nextReportId++, profileId: ownerOf(profileId) };
+    newReports.push(row);
+    if (id != null) reportMap.set(id, row.id);
+  }
+
+  // The file's own row ids are dropped rather than carried over: they belong to
+  // the database the backup came from and would collide with what is already
+  // here.
+  const newReadings = data.readings.map((reading) => {
+    const { id, ...rest } = reading;
+    return {
+      ...rest,
+      profileId: ownerOf(reading.profileId),
+      reportId: reading.reportId != null ? (reportMap.get(reading.reportId) ?? null) : null,
+    };
+  });
+
+  const newTargets = (data.targets ?? []).map((target) => {
+    const { id, profileId, ...rest } = target;
+    return { ...rest, profileId: ownerOf(profileId) };
+  });
+
+  const sealedProfiles = await Promise.all(newProfiles.map((row) => sealRow('profile', row)));
+  const sealedReports = await Promise.all(newReports.map((row) => sealRow('reports', row)));
+  const sealedReadings = await Promise.all(newReadings.map((row) => sealRow('readings', row)));
+  const sealedTargets = await Promise.all(newTargets.map((row) => sealRow('targets', row)));
+
+  // ---- one transaction, Dexie calls only ---------------------------------
+  await db.transaction('rw', db.profile, db.reports, db.readings, db.targets, db.attachments, async () => {
+    if (replacing) {
       const reportIds = await db.reports.toCollection().primaryKeys();
       if (reportIds.length) await db.attachments.where('reportId').anyOf(reportIds).delete();
       await Promise.all([db.reports.clear(), db.readings.clear(), db.targets.clear()]);
@@ -213,57 +373,17 @@ export async function importBackup(data, { mode = 'merge', intoProfileId = null 
       if (!intoProfileId && data.profiles?.length) await db.profile.clear();
     }
 
-    const profileMap = new Map();
-    if (intoProfileId != null) {
-      // Everything in the file lands on one existing person.
-      for (const profile of data.profiles ?? []) profileMap.set(profile.id, intoProfileId);
-      profileMap.set(null, intoProfileId);
-      profileMap.set(undefined, intoProfileId);
-    } else {
-      const existing = await listProfiles();
-      for (const profile of data.profiles ?? []) {
-        const { id, ...rest } = profile;
-        const newId = await db.profile.add({
-          ...DEFAULT_PROFILE,
-          ...rest,
-          color: rest.color ?? nextProfileColor([...existing, ...(await listProfiles())]),
-          createdAt: rest.createdAt ?? Date.now(),
-        });
-        profileMap.set(id, newId);
-      }
-    }
-
-    // Anything the file did not attribute goes to the first person imported, or
-    // to whoever is already here — never to nobody.
-    const fallbackProfileId =
-      intoProfileId ?? profileMap.values().next().value ?? (await listProfiles())[0]?.id ?? null;
-    const ownerOf = (id) => profileMap.get(id) ?? fallbackProfileId;
-
-    const reportMap = new Map();
-    for (const report of data.reports) {
-      const { id, profileId, ...rest } = report;
-      const newId = await db.reports.add({ ...rest, profileId: ownerOf(profileId) });
-      if (id != null) reportMap.set(id, newId);
-    }
-
-    const readings = data.readings.map((reading) => ({
-      ...reading,
-      profileId: ownerOf(reading.profileId),
-      reportId: reading.reportId != null ? (reportMap.get(reading.reportId) ?? null) : null,
-    }));
-    if (readings.length) await db.readings.bulkAdd(readings);
-
-    for (const target of data.targets ?? []) {
-      const { id, profileId, ...rest } = target;
-      await db.targets.add({ ...rest, profileId: ownerOf(profileId) });
-    }
-
-    return {
-      profiles: intoProfileId ? 0 : (data.profiles?.length ?? 0),
-      reports: data.reports.length,
-      readings: readings.length,
-    };
+    if (sealedProfiles.length) await db.profile.bulkPut(sealedProfiles);
+    if (sealedReports.length) await db.reports.bulkPut(sealedReports);
+    if (sealedReadings.length) await db.readings.bulkAdd(sealedReadings);
+    if (sealedTargets.length) await db.targets.bulkAdd(sealedTargets);
   });
+
+  return {
+    profiles: intoProfileId ? 0 : (data.profiles?.length ?? 0),
+    reports: newReports.length,
+    readings: newReadings.length,
+  };
 }
 
 // Wipe everything, for everybody. Used only from Settings, behind a

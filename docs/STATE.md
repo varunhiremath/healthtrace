@@ -2,6 +2,9 @@
 
 ## Status
 
+**v1.3.0** — Locked. Health data encrypts at rest behind a passphrase, with a fingerprint as the
+stronger second key. Everything below still holds.
+
 **v1.2.0** — PDFs in, cards out. Reports load straight from a PDF, and any reading can be shared. 245 vitest tests green, production build clean,
 and the whole flow driven end to end in a real browser.
 
@@ -42,6 +45,43 @@ and the whole flow driven end to end in a real browser.
 ---
 
 ## Build log
+
+### 2026-09-04 — the lock
+
+Health data now encrypts at rest. A passphrase derives a key that unwraps a random 256-bit data
+key; every value, note, profile name, date of birth, medication list, report title, lab, doctor,
+doctor-set target and attached original is sealed with AES-GCM before it reaches IndexedDB. When
+the app is locked there is no decrypted copy anywhere to skip to.
+
+A fingerprint is the *stronger* key, not the convenient one: WebAuthn's PRF extension returns key
+material derived inside the phone's secure element, which nothing on disk can be used to work out.
+A device that can check a fingerprint but has no PRF is **refused** with an explanation, rather
+than being given a fingerprint that merely gates a screen.
+
+Structure stays in the clear — ids, profileId, date, reportId and **markerKey** — because
+`[profileId+markerKey]` is the index every trend is drawn from. So the raw storage still shows
+which markers are tracked and when, but no value or name. The Settings screen says exactly that
+rather than implying the database is opaque.
+
+The two rules that shaped the write path: seal OUTSIDE Dexie transactions (WebCrypto's native
+promises let a transaction commit early), and replace whole rows instead of patching them (a Dexie
+`update` merges a plaintext field in beside the sealed blob). `addReport` and `importBackup` now
+assign their own row ids so everything can be sealed before the transaction opens — which also
+keeps their "all or nothing" promise intact.
+
+`importBackup` picked up a fix along the way: it was spreading the file's own row ids onto imported
+readings and targets, contradicting its own comment about re-keying and risking collisions on a
+merge. Those ids are now dropped.
+
+Verified by driving the real app and asserting against IndexedDB directly rather than against the
+screen — 19 checks covering what lands on disk before and after locking, that no known value, name,
+lab or medication survives in the raw rows, that a wrong passphrase is refused, that a reload comes
+back locked, that a reading written while locked is sealed too, that a specific value decrypts back
+to what it was, and that a full lock → change passphrase → unlock → remove round trip loses
+nothing. 353 unit tests green, production build clean.
+
+Biometric unlock is the one path the sandbox cannot exercise — it needs a real authenticator, so it
+wants a check on a phone.
 
 ### 2026-09-01 — the edge pagers made legible
 

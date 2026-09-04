@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Info, Trash2, AlertTriangle } from 'lucide-react';
 import { db } from '../db/db.js';
+import { openRow } from '../db/vault.js';
 import { addProfile, updateProfile, deleteProfile } from '../db/actions.js';
 import { useProfiles } from '../hooks/useHealth.js';
 import { ageAt, todayKey } from '../utils/dates.js';
@@ -36,7 +37,10 @@ export default function ProfilePage() {
   useEffect(() => {
     if (creating || form) return;
     let cancelled = false;
-    db.profile.get(profileId).then((row) => {
+    db.profile
+      .get(profileId)
+      .then((row) => openRow('profile', row))
+      .then((row) => {
       if (cancelled || !row) return;
       setForm({
         name: row.name ?? '',

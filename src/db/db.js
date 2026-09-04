@@ -59,6 +59,16 @@ db.version(2)
     }
   });
 
+// v3: the lock. One row, or none — a salt and the WRAPPED data key, never the
+// key itself and never the passphrase. Purely additive, so an existing install
+// upgrades without a byte of its health history being touched, and anyone who
+// never turns the lock on simply has an empty table.
+//
+// Dexie carries unchanged stores forward, so only the new one is named here.
+db.version(3).stores({
+  vault: '++id',
+});
+
 // When a newer tab or build wants to upgrade the schema, close this older
 // connection and reload, so the upgrade isn't blocked and left stuck.
 if (typeof window !== 'undefined') {
@@ -113,27 +123,6 @@ export function initialsOf(name) {
   return (words[0][0] + words[words.length - 1][0]).toUpperCase();
 }
 
-export async function listProfiles() {
-  const rows = await db.profile.toArray();
-  return rows
-    .map((row) => ({ ...DEFAULT_PROFILE, ...row }))
-    .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
-}
-
-// Resolve the person the app is currently showing. Falls back to the first
-// profile when the remembered one has been deleted, and creates one on a fresh
-// install so the rest of the app never has to handle "no profile at all".
-export async function getProfile(profileId) {
-  const rows = await listProfiles();
-  if (rows.length) {
-    return rows.find((row) => row.id === profileId) ?? rows[0];
-  }
-  const id = await db.profile.add({ ...DEFAULT_PROFILE, color: PROFILE_COLORS[0], createdAt: Date.now() });
-  return { ...DEFAULT_PROFILE, id, color: PROFILE_COLORS[0] };
-}
-
-export async function saveProfile(profileId, patch) {
-  const current = await getProfile(profileId);
-  await db.profile.update(current.id, patch);
-  return { ...current, ...patch };
-}
+// listProfiles / getProfile / saveProfile now live in db/actions.js. They read
+// and write rows, and with the lock on that means sealing and opening them —
+// which db.js cannot do without importing the vault, which imports db.js.

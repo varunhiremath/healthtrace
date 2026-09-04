@@ -47,9 +47,29 @@ Never rename the database. Migrations are append-only `db.version(n)` blocks.
 | `readings` | `++id, profileId, markerKey, date, reportId, [profileId+markerKey]` | The data. value, note unindexed |
 | `targets` | `++id, profileId, markerKey, [profileId+markerKey]` | Doctor-set min/max, per person |
 | `attachments` | `++id, reportId` | Original PDF/photo Blob, written from the report editor. Excluded from JSON backups |
+| `vault` | `++id` (v3) | One row, or none. Salt, iteration count and the **wrapped** data key — never the key, never the passphrase |
 
 `reportId` is `null` for a reading logged on its own from `/log`. `profileId` is never null — every
 report, reading and target belongs to exactly one person.
+
+**With the lock on**, the secret fields of a row are replaced by a single `sec` string
+(`v1.<iv>.<ciphertext>`) and the plaintext fields are gone from disk. Which fields those are is
+declared in one place, `SECRET_FIELDS` in `db/vault.js`:
+
+| Table | Encrypted | Left in the clear (and why) |
+| --- | --- | --- |
+| `profile` | name, relation, dob, sex, heightCm, conditions, medications | id, colour, createdAt |
+| `reports` | title, lab, doctor, note | id, profileId, date, createdAt — the `[profileId+date]` index |
+| `readings` | value, note | id, profileId, **markerKey**, date, reportId — `[profileId+markerKey]` is the lookup every trend uses |
+| `targets` | min, max | id, profileId, markerKey |
+| `attachments` | name, type, and the file itself as encrypted bytes in `cipher` | id, reportId, size |
+
+The honest limit: someone with the raw storage can see WHICH markers are tracked and on what
+dates, but no value, name, note, lab, doctor or original report. A row with no `sec` passes
+through untouched, which is what lets the lock be switched on as a migration rather than a
+rewrite.
+
+**v2 → v3** adds the `vault` table and nothing else — no existing row is touched by the upgrade.
 
 **v1 → v2** turned the single `profile` row into a table of people and stamped `profileId` onto every
 existing report, reading and target, handing them all to the profile that was already there. The old
@@ -76,6 +96,41 @@ person *using* the app, so they stay global.
 **Band contract:** ascending by `upTo`, which is the LAST value still in that band; the final band
 is `upTo: null`. A boundary on a marker that displays decimals must sit one display step below the
 clinical cut-off.
+
+## The lock
+
+`db/vault.js` is the mechanism; `store/lockStore.js` is what React reads; `components/LockScreen.jsx`
+is what you see when it is shut. The data key lives in a **module variable in vault.js and nowhere
+else** — not in localStorage, not in a persisted store, not in component state, so a reload always
+re-locks.
+
+```
+passphrase ──PBKDF2 (600k)──┐
+                            ├──> wrapping key ──> unwraps the DATA KEY ──> AES-GCM
+fingerprint ──WebAuthn PRF──┘                      (random, 256-bit)
+```
+
+Wrapping a random data key rather than encrypting with a passphrase-derived key directly is what
+allows two unlock methods without encrypting anything twice, and what makes changing the passphrase
+a single-row update instead of rewriting every reading.
+
+Two rules that are easy to break:
+
+- **Seal outside transactions.** WebCrypto returns native promises that settle outside Dexie's
+  transaction zone, so awaiting one inside a transaction lets it commit early. `addReport` and
+  `importBackup` therefore assign their own row ids, so everything can be sealed before the
+  transaction opens and the write still lands atomically.
+- **Replace rows, never patch them.** A Dexie `update` with a plaintext field merges it in beside
+  the sealed blob and leaves the secret on disk. `actions.js` uses `put` with a whole row for
+  anything secret.
+
+`generation` on the lock store counts up on every lock change; every live query in `useHealth.js`
+takes it as a dependency, because unlocking is not a change to any table and Dexie would otherwise
+never re-run.
+
+`listProfiles` / `getProfile` / `saveProfile` live in `db/actions.js` rather than `db/db.js`: they
+read and write rows, which now means sealing and opening them, and db.js cannot import the vault
+without a cycle.
 
 ## Utils (pure, each with a co-located `*.test.js`)
 

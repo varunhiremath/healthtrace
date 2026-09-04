@@ -4,6 +4,7 @@ import useSettingsStore from '../store/settingsStore.js';
 import { useHealthData } from '../hooks/useHealth.js';
 import { getMarker } from '../data/markers.js';
 import TopBar from '../components/layout/TopBar.jsx';
+import LockSection from '../components/settings/LockSection.jsx';
 
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -22,6 +23,8 @@ export default function SettingsPage() {
       />
 
       <div className="px-5 pt-4">
+        <LockSection />
+
         <Group title="Appearance">
           <div className="rounded-2xl px-4 py-3.5" style={{ background: 'var(--color-chalk)', border: '1px solid var(--color-ivory)' }}>
             <p className="mb-2.5 font-sans text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>

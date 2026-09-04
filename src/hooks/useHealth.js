@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, DEFAULT_PROFILE } from '../db/db.js';
+import { openRows } from '../db/vault.js';
+import useLockStore from '../store/lockStore.js';
 import { MARKER_KEYS, DERIVED_KEYS, getMarker } from '../data/markers.js';
 import { computeDerived } from '../utils/derived.js';
 import { effectiveMarker, classify } from '../utils/ranges.js';
@@ -10,10 +12,17 @@ import useSettingsStore, { DEFAULT_PINNED } from '../store/settingsStore.js';
 // One place that reads the database and hands the screens ready-to-render data.
 // Everything below is derived at read time — nothing computed here is stored,
 // so a deleted reading takes every number that depended on it with it.
+//
+// When the lock is on, rows arrive from Dexie sealed and are opened here — so
+// decryption happens in exactly one place, on the way in, and no screen has to
+// know the difference. Every query takes the lock's `generation` as a
+// dependency: unlocking is not a change to any table, so without it Dexie would
+// have no reason to re-run and the screens would sit on empty results.
 
 // Everyone in the household, oldest first, so the order does not shuffle.
 export function useProfiles() {
-  const rows = useLiveQuery(() => db.profile.toArray(), [], undefined);
+  const generation = useLockStore((s) => s.generation);
+  const rows = useLiveQuery(async () => openRows('profile', await db.profile.toArray()), [generation], undefined);
   return useMemo(() => {
     if (rows === undefined) return { profiles: [], loaded: false };
     const profiles = rows
@@ -43,28 +52,33 @@ export function useProfile() {
 }
 
 export function useReports(profileId) {
+  const generation = useLockStore((s) => s.generation);
   return useLiveQuery(
-    () =>
+    async () =>
       profileId == null
         ? []
-        : db.reports.where('profileId').equals(profileId).reverse().sortBy('date'),
-    [profileId],
+        : openRows('reports', await db.reports.where('profileId').equals(profileId).reverse().sortBy('date')),
+    [profileId, generation],
     undefined
   );
 }
 
 export function useReadings(profileId) {
+  const generation = useLockStore((s) => s.generation);
   return useLiveQuery(
-    () => (profileId == null ? [] : db.readings.where('profileId').equals(profileId).toArray()),
-    [profileId],
+    async () =>
+      profileId == null ? [] : openRows('readings', await db.readings.where('profileId').equals(profileId).toArray()),
+    [profileId, generation],
     undefined
   );
 }
 
 export function useTargets(profileId) {
+  const generation = useLockStore((s) => s.generation);
   const rows = useLiveQuery(
-    () => (profileId == null ? [] : db.targets.where('profileId').equals(profileId).toArray()),
-    [profileId],
+    async () =>
+      profileId == null ? [] : openRows('targets', await db.targets.where('profileId').equals(profileId).toArray()),
+    [profileId, generation],
     undefined
   );
   return useMemo(() => {
@@ -75,9 +89,11 @@ export function useTargets(profileId) {
 }
 
 export function useAttachments(reportId) {
+  const generation = useLockStore((s) => s.generation);
   return useLiveQuery(
-    () => (reportId == null ? [] : db.attachments.where('reportId').equals(reportId).toArray()),
-    [reportId],
+    async () =>
+      reportId == null ? [] : openRows('attachments', await db.attachments.where('reportId').equals(reportId).toArray()),
+    [reportId, generation],
     undefined
   );
 }
@@ -198,9 +214,11 @@ export function useMarkerHistory(markerKey) {
 // The readings that belong to one report, with their statuses, grouped by
 // category in catalogue order.
 export function useReportReadings(reportId) {
+  const generation = useLockStore((s) => s.generation);
   const rows = useLiveQuery(
-    () => (reportId == null ? [] : db.readings.where('reportId').equals(reportId).toArray()),
-    [reportId],
+    async () =>
+      reportId == null ? [] : openRows('readings', await db.readings.where('reportId').equals(reportId).toArray()),
+    [reportId, generation],
     undefined
   );
   const { profile, profileId } = useProfile();
